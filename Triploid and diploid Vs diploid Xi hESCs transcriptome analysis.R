@@ -15,9 +15,6 @@ library(FSA)
 library(ggsignif)
 library(ggpubr)
 
-# setwd("C:/Users/guyha/Desktop/RNA-seq counts guy")
-setwd("C:/Users/owner/Desktop/RNA-seq counts guy")
-
 #loading RNA-seq data from each sample into a data.frame and getting rid of unnecessary data (first 4 rows and second and third columns)
 dsRed_4c_1 <- read.delim("dsRed-hygro4cp40_S3_counts.txt", skip = 1)[,c(1,7)]
 dsRed_4c_2 <- read.delim("G1_10R_4c_p38_counts.txt", skip = 1)[,c(1,7)]
@@ -31,7 +28,7 @@ fusion_3n_Clone_K <- read.delim("Clone-K-3n_S8_counts.txt", skip = 1)[,c(1,7)]
 fusion_3n_Clone_J <- read.delim("Clone-J-3n_S12_counts.txt", skip = 1)[,c(1,7)]
 #fusion_3n_Clone_B1 <- read.delim("fusionI-3n-f-4-cloneB_S7_counts.txt", skip = 1)[,c(1,7)]  #weired RNA-seq
 fusion_3n_Clone_B <- read.delim("Clone-B-3n_S7_counts.txt", skip = 1)[,c(1,7)] #second RNA-seq of clone B
-# 
+ 
 HuES53 <- read.delim("C:/Users/owner/Desktop/RNA-seq counts guy/Ido's samples/SRR2921778_ReadsPerGene.out.tab", skip = 1)[-c(1:4),1:2]
 HuES64 <- read.delim("C:/Users/owner/Desktop/RNA-seq counts guy/Ido's samples/SRR2921779_ReadsPerGene.out.tab", skip = 1)[-c(1:4),1:2]
 colnames(HuES53)[1] <- "Geneid"
