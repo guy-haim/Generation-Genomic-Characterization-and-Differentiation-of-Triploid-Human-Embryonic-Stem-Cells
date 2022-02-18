@@ -15,9 +15,6 @@ library(FSA)
 library(ggsignif)
 library(ggpubr)
 
-setwd("C:/Users/owner/Desktop/RNA-seq counts guy/RNA-seq EBs and teratomas")
-# setwd("C:/Users/guyha/Desktop/RNA-seq counts guy/RNA-seq EBs and teratomas")
-
 #loading RNA-seq data from each sample into a data.frame and getting rid of unnecessary data (first 4 rows and second and third columns)
 EGFP_neo_2n_T1 <- read.delim("T1-10G-4c-p41-T1_S8_counts.txt", skip = 1)[,c(1,7)]
 EGFP_neo_2n_T2 <- read.delim("T2_h_pES10_EGFP_neo_p41_4c_T2_1_counts.txt", skip = 1)[,c(1,7)]
@@ -74,7 +71,6 @@ cpm_normalized <- merge(gene_lengths, cpm_normalized, by = "SYMBOL",all.y = T)
 cpm_normalized_2 <- merge(gene_lengths, cpm_normalized_2, by = "SYMBOL",all.y = T)
 .rowNamesDF(cpm_normalized, make.names=T) <- cpm_normalized$SYMBOL
 .rowNamesDF(cpm_normalized_2, make.names=T) <- cpm_normalized_2$SYMBOL
-cpm_normalized_X <- cpm_normalized_2[cpm_normalized_2$SYMBOL %in% X_genes,]
 
 prin_comp <- prcomp(t(cpm_normalized[,8:15]), center = T, retx = T)
 gg <- cbind.data.frame(prin_comp$x, "Sample" =colnames(gene_exp_all)[8:15])
@@ -88,9 +84,7 @@ summary(prin_comp)
 batch <- factor(c(1,1,2,1,1,2,2,1), labels = c("batch1","batch2"))
 design <- model.matrix(~batch + ploidy)
 DE_TMM <- estimateDisp(DE_TMM, design, robust=TRUE)
-# fit_TMM <- glmFit(DE_TMM, design)   #fit the model
-fit_TMM <- glmQLFit(DE_TMM, design)   #fit the model (suited for low number of replicates)
-# LRT_3n_Vs_2n <- glmTreat(fit_TMM, lfc=log2(2))  #comparing triploids to diploids
+fit_TMM <- glmFit(DE_TMM, design)   #fit the model
 LRT_3n_Vs_2n <- glmLRT(fit_TMM)  #comparing triploids to diploids
 
 summary(decideTests(LRT_3n_Vs_2n))  #decide by FDR
@@ -108,15 +102,9 @@ sig_DE_3n<- data.frame(sig_DE_3n[,1:8],"Fold.Change"=2^sig_DE_3n$logFC_triploids
 library(fgsea)
 library(dplyr)
 
-# ranks <- TMM_3n[TMM_3n$FDR<=0.05 & abs(TMM_3n$logFC_triploids)>1,]
 ranks <- TMM_3n
 ranks[, 'score'] <-ranks$logFC_triploids* (-log(ranks$FDR))
-
-# ranks[ranks$logFC_triploids < 0, 'score'] <-
-#   ranks[ranks$logFC_triploids < 0,'logFC_triploids'] + log(ranks[ranks$logFC_triploids < 0,'FDR'])
-
 .rowNamesDF(ranks, make.names=T) <- ranks$SYMBOL
-
 ranks <- setNames(ranks$score,ranks$SYMBOL)
 cell_types <- gmtPathways("c8.all.v7.4.symbols.gmt") 
 fgseaRes <- fgseaMultilevel(cell_types, ranks, minSize=20, maxSize=500,eps = 0)
@@ -125,8 +113,6 @@ fgseaRes <- fgseaRes[fgseaRes$padj < 0.05,]
 
 collapsedPathways <- collapsePathways(fgseaRes[order(padj)][fgseaRes$padj < 0.05,], cell_types, ranks, nperm = 100000,pval.threshol = 0.01)
 mainPathways_fdr <- fgseaRes[pathway %in% collapsedPathways$mainPathways][order(padj), pathway]
-dev.new()
-plotGseaTable(cell_types[mainPathways_fdr], ranks, fgseaRes, gseaParam = 0.5)
 
 fgseaResTidy <- fgseaRes %>%
   as_tibble() %>%
@@ -250,7 +236,8 @@ tpm_calc <- function(counts, lengths) {
 }
 
 
-#######TeratoScore#######
+####### Differentiation analysis #######
+                          
 gct <- read.delim(file= "GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_median_tpm.gct", skip=2)
 #removing the end of the ENSEMBL ID so that the same genes from different versions of the annotation file will be joined together  
 
@@ -413,30 +400,3 @@ ggbarplot(melted_gene_exp, x= "Lineage", y= "gene_expression",fill="Ploidy",pale
   theme_classic()+ylab("Relative Lineage-Specific Gene Expression (%)")+xlab(NULL)+
   theme(text = element_text(size = 13.5,face = "bold"), legend.position = "top")+
   scale_x_discrete(labels = c("Pluripotent","Nervous\nSystem","Kidney","Placenta","Lung","Gut","Skin","Blood","Pancreas","Liver","Heart","Skeletal\nMuscle"))
-
-
-tissues <- str_replace_all(tissues,"[.]"," ")
-
-y_lims <- c(8,4,12,3,180,8,5,80,6,200,3,40)
-names(y_lims) <- tissues
-gg<-c()
-for (i in tissues[c(5,10,1:4,6:9,11:12)]){
-  gg[[i]]=ggboxplot(melted_gene_exp[melted_gene_exp$Lineage==i,], x= "Lineage", y= "gene_expression",
-                    fill="Ploidy",palette = c("royalblue","red3"),fun="mean_sd1",xlab = F,outlier.shape = NA,ylab = "% Gene Expression") +
-    stat_compare_means(aes(group = Ploidy), label = "p.signif", method = "kruskal.test", hide.ns = T,label.y = y_lims[i]-0.1*y_lims[i],size=5)+
-    coord_cartesian(ylim=c(0,y_lims[i]))
-}
-ggarrange(plotlist =gg, ncol = 4, nrow = 3)
-
-gg<-c()
-y_lims <- c(20,2,12,3,75,10,8,40,3,60,4,25)
-names(y_lims) <- tissues
-
-for (i in tissues[c(5,10,1:4,6:9,11:12)]){
-  gg[[i]]=ggplot(melted_gene_exp[melted_gene_exp$Lineage==i,], aes(x=Ploidy , y= gene_expression))+
-    stat_summary(geom="bar",fun="mean",fill=c("royalblue","red3"))+
-    xlab(paste(str_replace(i,"[.]"," ")))+ylab("Relative Gene Expression (%)")+geom_errorbar(stat='summary',fun.data=mean_se,width=.3)+
-    stat_compare_means(aes(group = Ploidy), label = "p.signif", method = "kruskal.test", hide.ns = T,size=7,paired = T,label.x = 1.4,label.y = y_lims[i]-0.1*y_lims[i])+
-    coord_cartesian(ylim=c(0,y_lims[i]))+theme_classic()
-}
-ggarrange(plotlist =gg, ncol = 4, nrow = 3)
