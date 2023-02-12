@@ -15,6 +15,8 @@ library(FSA)
 library(ggsignif)
 library(ggpubr)
 
+setwd("C:/Users/owner/Desktop/RNA-seq counts guy")
+
 #loading RNA-seq data from each sample into a data.frame and getting rid of unnecessary data (first 4 rows and second and third columns)
 dsRed_4c_1 <- read.delim("dsRed-hygro4cp40_S3_counts.txt", skip = 1)[,c(1,7)]
 dsRed_4c_2 <- read.delim("G1_10R_4c_p38_counts.txt", skip = 1)[,c(1,7)]
@@ -191,6 +193,13 @@ stat=compare_means(Expression~Ploidy, data = melted_ion, method="wilcox.test", p
 ggbarplot(melted_ion, x= "Group", y= "Expression",fill="Ploidy",palette = c("royalblue","red3"), position = position_dodge(0.8), add="mean_se")+
   stat_pvalue_manual(data = stat, label = "p.signif", y.position = 2, size = 7,x = "Group",hide.ns = T)+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
+### Difference in expression (%) per gene ###
+melted_ion_genes <- melted_ion
+stat=compare_means(Expression~Ploidy, data = melted_ion_genes, method="wilcox.test", p.adjust.method = "BH",group.by = "SYMBOL")
+melted_ion_genes <- melted_ion_genes[stat$p.format<=0.05,]
+ggbarplot(melted_ion_genes, x= "SYMBOL", y= "Expression",fill="Ploidy",palette = c("royalblue","red3"),width = 0.5, position = position_dodge(0.6), add="mean_se")+
+  stat_pvalue_manual(data = stat[stat$p.format<=0.05,], size=4.5, label = "p.format", y.position = 3.2, x = "SYMBOL",hide.ns = F)+xlab("")+geom_hline(yintercept = 0, linetype=2)+
+  scale_y_continuous(breaks=seq(-30,10,5))+ylab("Difference in expression (%)")+theme(axis.text.x = element_text(angle = 90), text = element_text(size = 10))
 
 # Plotting ion channels by more general subgroups (according to HGNC):
 melted_ion_general <- melted_ion
@@ -229,9 +238,16 @@ melted_ion_general <- melted_ion_general[order(melted_ion_general$Order),]
 
 stat=compare_means(Expression~Ploidy, data = melted_ion_general, method="wilcox.test", p.adjust.method = "BH",group.by = "Group")
 ggbarplot(melted_ion_general, x= "Group", y= "Expression",fill="Ploidy",palette = c("royalblue","red3"),width = 0.5, position = position_dodge(0.6), add="mean_se")+
-  stat_pvalue_manual(data = stat, size=4.5, label = "p.adj", y.position = 10, x = "Group",hide.ns = F)+xlab("")+geom_hline(yintercept = 0, linetype=2)+
+  stat_pvalue_manual(data = stat, size=4.5, label = "p.adj", y.position = 10, x = "Group", hide.ns = F)+xlab("")+geom_hline(yintercept = 0, linetype=2)+
   scale_y_continuous(breaks=seq(-30,10,5))+ylab("Difference in expression (%)")+theme(text = element_text(size = 17),axis.text.y = element_text(size = 12))
 
+### Difference in Ca channels expression (%) per gene ###
+melted_calcium_channel_genes <- melted_ion_general[melted_ion_general$Group=="Calcium channels",]
+stat=compare_means(Expression~Ploidy, data = melted_calcium_channel_genes, method="wilcox.test", p.adjust.method = "BH",group.by = "SYMBOL")
+# melted_ion_genes <- melted_ion_genes[stat$p.format<=0.05,]
+ggbarplot(melted_calcium_channel_genes, x= "SYMBOL", y= "Expression",fill="Ploidy",palette = c("royalblue","red3"),width = 0.5, position = position_dodge(0.6), add="mean_se")+
+  stat_pvalue_manual(data = stat, size=4, label = "p.format", y.position = 90, x = "SYMBOL",hide.ns = F)+xlab("")+geom_hline(yintercept = 0, linetype=2)+
+  scale_y_continuous(breaks=seq(-100,100,10))+ylab("Difference in expression (%)")+theme(axis.text.x = element_text(angle = 90), text = element_text(size = 12))
 
 ## GPCRs genes ##
 GPCR_genes <- read.delim("GPCRs_genes.txt")
@@ -573,7 +589,6 @@ genome_size=sum(chr_size)
 dev.new()
 plot(1000000,1,col="white",pch=15,cex=0.4,ylim=c(-1,1),las=1, ylab=expression(paste("Relative  ",log[2](Expression))),typ="l",xlab="",xaxt = "n",xlim=c(CGH$start[1],genome_size))
 
-
 for(i in 1 :23){
   if (i>1){
     lines(c(chr_total[i],chr_total[i]),c(-1,1),col="gray48")
@@ -609,3 +624,218 @@ for(i in 8:18){
 }
 par(mai=c(21, 6, 0, 6), xpd=TRUE)
 legend(x = "bottom",horiz = F, legend = str_replace_all(names(cl),"_", " "), text.col = cl,ncol = 6, xpd = T, text.width = max(strwidth(names(cl)))/130, x.intersp = 4, y.intersp = 4, bty="n")
+
+
+roll_mean <- data.frame("genomic_loci"=rollmean(y,window),"dsRed 2n rep1"=rollmean(CGH[,8],window),"dsRed 2n rep2"=rollmean(CGH[,9],window),
+                        "EGFP 2n rep1"=rollmean(CGH[,10],window),"EGFP 2n rep2"=rollmean(CGH[,11],window),"3n clone H"=rollmean(CGH[,12],window),
+                        "3n clone I"=rollmean(CGH[,13],window),"3n clone L rep1"=rollmean(CGH[,14],window),"3n clone L rep2"=rollmean(CGH[,15],window),
+                        "3n clone K"=rollmean(CGH[,16],window),"3n clone J"=rollmean(CGH[,17],window),"3n clone B"=rollmean(CGH[,18],window))
+
+
+melted_rollmean <- melt(data = roll_mean,id.vars = "genomic_loci")
+melted_rollmean <-  data.frame(melted_rollmean,"Ploidy"=c(rep("2n",52240),rep("3n",91420)))
+stat <- compare_means(value~Ploidy,data = melted_rollmean,method = "wilcox.test",p.adjust.method = "BH",group.by = "genomic_loci")
+sig_genomic_loci <- stat[stat$p.adj<0.05,c(1,6)]
+if (nrow(sig_genomic_loci)>0){
+  points(x = sig_genomic_loci$genomic_loci, y = rep(0.8,nrow(sig_genomic_loci)),col = "blue", cex = 0.2,pch=8)
+}
+
+
+
+########################### relative e-Karyotype per chr ####################
+tpm$chr <- str_remove(tpm$chr, "chr")
+tpm$chr[tpm$chr=="X"] <- 23
+tpm$chr <- as.numeric(tpm$chr)
+tpm <- na.omit(tpm)
+tpm <- tpm[order(tpm$chr,tpm$start),]
+for (i in 1:23){
+  tpm_E <-tpm[tpm$chr==i,]
+  tpm_E[,8:18] <- (tpm_E[,8:18]+1)/(((tpm_E[,8]+tpm_E[,9]+tpm_E[,10]+tpm_E[,11])/4)+1)
+  tpm_E <-data.frame(tpm_E[,1:7],"Diploid"=apply(tpm_E[8:11],1,mean),"Triploid"=apply(tpm_E[12:18],1,mean))
+  dev.new()
+  plot(1000000,1,col="white",pch=15,cex=0.4,ylim=c(0,2), ylab="Gene Expression",typ="l",xlab="",xaxt = "n",xlim=c(0,chr_size[i]))
+  xtick<-as.numeric(format(seq(0, chr_size[i], by=5000000), scientific = F))
+  axis(side=1, at = xtick, labels = xtick/1000000,pos = -5.5,cex.axis=0.75)
+  lines(c(0,chr_size[i]),c(0,0),lwd=10,col="black")
+  lines(c(0,chr_size[i]),c(0,0),lwd=8,col="gray50")
+  lines(c(0,chr_size[i]),c(0,0),lwd=7,col="gray53")
+  lines(c(0,chr_size[i]),c(0,0),lwd=6,col="gray59")
+  lines(c(0,chr_size[i]),c(0,0),lwd=4,col="gray75")
+  lines(c(0,chr_size[i]),c(0,0),lwd=2,col="gray85")
+  lines(c(0,chr_size[i]),c(0,0),lwd=1,col="gray90")
+  lines(c(centromere_pos[i],centromere_pos[i]),c(-0.01,0.01),col="grey13",lwd=2)
+  window=30 # moving average window size
+  for(j in c(8:9)){
+    lines(frollmean(tpm_E$start,window),frollmean(tpm_E[,j],window),col=c("royalblue","red3")[j-7],)
+  }
+  par(mai=c(21, 6, 1, 6), xpd=TRUE)
+  legend(x = "bottom", legend = c("Diploid pES10","Triploid pES10"), text.col = c("royalblue","red3"), xpd = T, ncol = 4, text.width = max(strwidth(ploidy))/10, x.intersp = 3,y.intersp = 3, bty="n")
+  if (i==23){
+    title(main = "Chr X")
+  }
+  else{
+    title(main = paste("Chr",i))
+  }
+  #statistical analysis of the differences between diploid and triploid expression levels across chromosome #i:
+  tpm_i <- tpm[tpm$chr==i,]
+  roll_mean <- data.frame("genomic_loci"=frollmean(tpm_i$start,window),"dsRed 2n rep1"=frollmean(tpm_i[,8],window),"dsRed 2n rep2"=frollmean(tpm_i[,9],window),
+                          "EGFP 2n rep1"=frollmean(tpm_i[,10],window),"EGFP 2n rep2"=frollmean(tpm_i[,11],window),"3n clone H"=frollmean(tpm_i[,12],window),
+                          "3n clone I"=frollmean(tpm_i[,13],window),"3n clone L rep1"=frollmean(tpm_i[,14],window),"3n clone L rep2"=frollmean(tpm_i[,15],window),
+                          "3n clone K"=frollmean(tpm_i[,16],window),"3n clone J"=frollmean(tpm_i[,17],window),"3n clone B"=frollmean(tpm_i[,18],window))
+  roll_mean <- na.omit(roll_mean)
+  
+  melted_rollmean <- melt(data = roll_mean,id.vars = "genomic_loci")
+  melted_rollmean <-  data.frame(melted_rollmean,"Ploidy"=c(rep("2n",nrow(roll_mean)*4),rep("3n",nrow(roll_mean)*7)))
+  stat <- compare_means(value~Ploidy,data = melted_rollmean,method = "wilcox.test",p.adjust.method = "BH",group.by = "genomic_loci")
+  sig_genomic_loci <- stat[stat$p.adj<0.05,c(1,6)]
+  points(x = sig_genomic_loci$genomic_loci, y = rep(1.9,nrow(sig_genomic_loci)),col = "blue", cex = 0.2,pch=8)
+  
+}
+
+
+####### Cell Cycle Analysis ########
+setwd("C:/Users/owner/Desktop/FACS results")
+FACS_results <- read.csv("cell_cycle_analysis_2n_vs_3n (Dean Jett Fox model).csv")
+# FACS_results <- FACS_results[FACS_results$Depth=="> > > ",]
+# FACS_results <- data.frame(FACS_results,"Ploidy"=c(rep("3n",27),rep("2n",15)))
+# FACS_results$Name <- rep(c("G1","S","G2/M"),14)
+
+stat=compare_means(Percentage~Ploidy, data = FACS_results, method="t.test", p.adjust.method = "BH", group.by = "Cell.cycle.phase")
+ggbarplot(FACS_results, x= "Cell.cycle.phase", y= "Percentage",fill="Ploidy",palette = c("royalblue","red"), position = position_dodge(0.8), add="mean_se")+
+  scale_y_continuous(breaks=seq(0,70,10))+xlab(label = "")+
+  ylab(label = "Cells in cell cycle (%)")+
+  stat_pvalue_manual(data = stat, label = "p.format",y.position = 60,x = "Cell.cycle.phase",hide.ns = F)
+
+proliferation_status <- data.frame("Cell.cycle.phase"=c(rep("G1",16),rep("S/G2/M",16)),"Ploidy"=rep(c(rep("3n",10),rep("2n",6)),2),
+                                   "Percentage"=c(FACS_results$Percentage[FACS_results$Cell.cycle.phase=="G1"],FACS_results$Percentage[FACS_results$Cell.cycle.phase=="S"]+FACS_results$Percentage[FACS_results$Cell.cycle.phase=="G2/M"]))
+
+stat=compare_means(Percentage~Ploidy, data = proliferation_status, method="t.test", p.adjust.method = "BH", group.by = "Cell.cycle.phase")
+ggbarplot(proliferation_status, x= "Cell.cycle.phase", y= "Percentage",fill="Ploidy",palette = c("royalblue","red"), position = position_dodge(0.8), add="mean_se")+
+  scale_y_continuous(breaks=seq(0,70,10))+xlab(label = "")+
+  ylab(label = "Cells in cell cycle (%)")+
+  stat_pvalue_manual(data = stat, label = "p.adj",y.position = 60,x = "Cell.cycle.phase",hide.ns = F)
+
+
+##### cell cycle analysis w/o problematic (contact inhibited) samples #####
+FACS_results <- FACS_results[FACS_results$Sample=="Fusion I_3n clone H_001.fcs" |
+                               FACS_results$Sample=="Fusion I_3n clone H_002.fcs" | 
+                               FACS_results$Sample=="Fusion I_3n clone L_003.fcs" |
+                               FACS_results$Sample=="10R 4c p38_005.fcs" |
+                               FACS_results$Sample=="exp_1_10G 4c p47_001.fcs" |
+                               FACS_results$Sample=="exp_1_10R 4c p42_002.fcs"|
+                               FACS_results$Sample=="exp_1_10R 4c p41_002.fcs",]
+
+stat=compare_means(Percentage~Ploidy, data = FACS_results, method="t.test", p.adjust.method = "BH", group.by = "Cell.cycle.phase")
+ggbarplot(FACS_results, x= "Cell.cycle.phase", y= "Percentage",fill="Ploidy",palette = c("royalblue","red"), position = position_dodge(0.8), add="mean_se")+
+  scale_y_continuous(breaks=seq(0,70,10))+xlab(label = "")+
+  ylab(label = "Cells in cell cycle (%)")+
+  stat_pvalue_manual(data = stat, label = "p.format",y.position = 60,x = "Cell.cycle.phase",hide.ns = F)
+
+proliferation_status <- data.frame("Cell.cycle.phase"=c(rep("G1",7),rep("S/G2/M",7)),"Ploidy"=rep(c(rep("3n",3),rep("2n",4)),2),
+                                   "Percentage"=c(FACS_results$Percentage[FACS_results$Cell.cycle.phase=="G1"],FACS_results$Percentage[FACS_results$Cell.cycle.phase=="S"]+FACS_results$Percentage[FACS_results$Cell.cycle.phase=="G2/M"]))
+
+#test for normality:
+for (i in c("G1","S/G2/M")){
+  print(shapiro.test(proliferation_status[proliferation_status$Ploidy=="2n" & proliferation_status$Cell.cycle.phase==i,3]))
+}
+for (i in c("G1","S/G2/M")){
+  print(shapiro.test(proliferation_status[proliferation_status$Ploidy=="3n" & proliferation_status$Cell.cycle.phase==i,3]))
+}
+
+stat=compare_means(Percentage~Ploidy, data = proliferation_status, method="t.test", p.adjust.method = "BH", group.by = "Cell.cycle.phase")
+ggbarplot(proliferation_status, x= "Cell.cycle.phase", y= "Percentage",fill="Ploidy",palette = c("royalblue","red"), position = position_dodge(0.8), add="mean_se")+
+  scale_y_continuous(breaks=seq(0,70,10))+xlab(label = "")+
+  ylab(label = "Cells in cell cycle (%)")+
+  stat_pvalue_manual(data = stat, label = "p.format",y.position = 60,x = "Cell.cycle.phase",hide.ns = F)
+
+
+##### growth assay #####
+setwd("C:/Users/owner/Desktop/Growth assay/exp. 1")
+growth <- read.csv("intensity_levels_summary_(6K_per_well).csv")
+growth <- data.frame(growth,"Ploidy"=rep(c(rep("3n",12),rep("2n",12)),5))
+
+stat=compare_means(Intensity~Ploidy, data = growth, method="t.test", p.adjust.method = "BH", group.by = "timepoint")
+ggplot(growth, aes(x=timepoint, y=Intensity, group=Sample)) +
+  stat_summary(fun = mean, geom='line', aes(color=Sample), lty=1, size=1.3) +
+  stat_summary(fun=mean,geom='point') +
+  stat_summary(fun.data=mean_cl_boot,geom='errorbar',width=0.2) +
+  theme_bw()+scale_colour_manual(values=c("deepskyblue1","deepskyblue3","royalblue1","royalblue3","red1","red2","red3","red4"))
+
+relative_growth <- growth
+day_1 <- relative_growth$Intensity[relative_growth$timepoint=="Day 1"]
+Mean <- c(rep(mean(day_1[1:3]),3),rep(mean(day_1[4:6]),3),rep(mean(day_1[7:9]),3),rep(mean(day_1[10:12]),3),
+          rep(mean(day_1[13:15]),3),rep(mean(day_1[16:18]),3),rep(mean(day_1[19:21]),3),rep(mean(day_1[22:24]),3))
+relative_growth$Intensity <- relative_growth$Intensity/Mean
+
+stat=compare_means(Intensity~Ploidy, data = relative_growth, method="t.test", p.adjust.method = "BH", group.by = "timepoint")
+ggplot(relative_growth, aes(x=timepoint, y=Intensity, group=Sample)) +
+  stat_summary(fun = mean, geom='line', aes(color=Sample), lty=1, size=1.3) +
+  stat_summary(fun=mean,geom='point') +
+  stat_summary(fun.data=mean_cl_boot,geom='errorbar',width=0.2) +
+  theme_bw()+scale_colour_manual(values=c("deepskyblue1","deepskyblue3","royalblue1","royalblue3","red1","red2","red3","red4"))+
+  stat_compare_means(aes(group = Ploidy), label = "p.format", label.y = c(2,3,5,12,15))
+
+###### w/o outlier Samples ######
+relative_growth <- relative_growth[relative_growth$Sample!="pES10 3n clone L",]
+relative_growth <- relative_growth[relative_growth$Sample!="h-pES10 10R 4c rep2",]
+
+#test for normality:
+for (i in c("Day 1","Day 2","Day 3","Day 4","Day 5")){
+  print(shapiro.test(relative_growth[relative_growth$Ploidy=="2n" & relative_growth$timepoint==i,2]))
+}
+for (i in c("Day 1","Day 2","Day 3","Day 4","Day 5")){
+  print(shapiro.test(relative_growth[relative_growth$Ploidy=="3n" & relative_growth$timepoint==i,2]))
+}
+
+stat=compare_means(Intensity~Ploidy, data = relative_growth, method="t.test", p.adjust.method = "BH", group.by = "timepoint")
+ggplot(relative_growth, aes(x=timepoint, y=Intensity, group=Sample)) +
+  stat_summary(fun = mean, geom='line', aes(color=Sample), lty=1, size=1.3) +
+  stat_summary(fun=mean,geom='point') + ylab("Relative intensity")+
+  stat_summary(fun.data=mean_cl_boot,geom='errorbar',width=0.2) +
+  theme_bw()+scale_colour_manual(values=c("deepskyblue1","deepskyblue3","royalblue1","red1","red2","red3"))+
+  stat_compare_means(aes(group = Ploidy), label = "p.format", label.y = c(2,3,5,7,9))+
+  scale_y_continuous(breaks=seq(0,10,1))
+
+###### average, w/o outliers ######
+stat=compare_means(Intensity~Ploidy, data = relative_growth, method="t.test", p.adjust.method = "BH", group.by = "timepoint")
+ggplot(relative_growth, aes(x=timepoint, y=Intensity, group=Ploidy)) +
+  stat_summary(fun = mean, geom='line', aes(color=Ploidy), lty=1, size=1.3) +
+  stat_summary(fun=mean,geom='point') + ylab("Relative intensity")+
+  stat_summary(fun.data=mean_cl_boot,geom='errorbar',width=0.2,aes(color=Ploidy)) +
+  theme_bw()+scale_colour_manual(values=c("royalblue","red"))+
+  stat_compare_means(aes(group = Ploidy), label = "p.format", label.y = c(2,3,4,5.5,7.5))+
+  scale_y_continuous(breaks=seq(0,10,1))
+
+
+####### RNA content Analysis ########
+setwd("C:/Users/owner/Desktop/AO staining 2n vs 3n")
+AO_1 <- read.csv("statistics AO-1.csv")
+AO_2 <- read.csv("statistics AO-2.csv")
+
+mean_RNA_2n_1 <- mean(AO_1$mean.RNA[1:2])
+relative_AO_1 <- AO_1$mean.RNA/mean_RNA_2n_1
+mean_RNA_2n_2 <- mean(AO_2$mean.RNA[1:2])
+relative_AO_2 <- AO_2$mean.RNA/mean_RNA_2n_2
+
+relative_RNA <- data.frame("Sample"=rep(AO_1$Sample,2),"RNA_content"=c(relative_AO_1,relative_AO_2),"Ploidy"=c("2n","2n","3n","3n","2n","2n","3n","3n"))
+#test for normality:
+shapiro.test(relative_RNA[c(1,2,5,6),2])
+shapiro.test(relative_RNA[c(3,4,7,8),2])
+
+stat=compare_means(RNA_content~Ploidy, data = relative_RNA, method="t.test", p.adjust.method = "BH")
+ggbarplot(relative_RNA, x= "Ploidy", y= "RNA_content",fill="Ploidy",palette = c("royalblue","red"), position = position_dodge(0.8),label = T,lab.vjust = -3,lab.nb.digits = 3, add="mean_se")+
+  ylab(label = "Relative RNA content")+
+  stat_pvalue_manual(data = stat, label = "p.format",y.position = 1.9,hide.ns = F)
+
+####### DNA content Analysis ########
+mean_DNA_2n_1 <- mean(AO_1$mean.DNA[1:2])
+relative_AO_1 <- AO_1$mean.DNA/mean_DNA_2n_1
+mean_DNA_2n_2 <- mean(AO_2$mean.DNA[1:2])
+relative_AO_2 <- AO_2$mean.DNA/mean_DNA_2n_2
+
+relative_DNA <- data.frame("Sample"=rep(AO_1$Sample,2),"DNA_content"=c(relative_AO_1,relative_AO_2),"Ploidy"=c("2n","2n","3n","3n","2n","2n","3n","3n"))
+
+stat=compare_means(DNA_content~Ploidy, data = relative_DNA, method="t.test", p.adjust.method = "BH")
+ggbarplot(relative_DNA, x= "Ploidy", y= "DNA_content",fill="Ploidy",palette = c("royalblue","red"), position = position_dodge(0.8),label = T,lab.vjust = -2.5,lab.nb.digits = 3, add="mean_se")+
+  ylab(label = "Relative DNA content")+
+  stat_pvalue_manual(data = stat, label = "p.format",y.position = 1.7,hide.ns = F)
