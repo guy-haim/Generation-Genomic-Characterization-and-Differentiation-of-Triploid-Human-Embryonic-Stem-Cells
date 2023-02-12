@@ -15,6 +15,9 @@ library(FSA)
 library(ggsignif)
 library(ggpubr)
 
+setwd("C:/Users/owner/Desktop/RNA-seq counts guy/RNA-seq EBs and teratomas")
+# setwd("C:/Users/guyha/Desktop/RNA-seq counts guy/RNA-seq EBs and teratomas")
+
 #loading RNA-seq data from each sample into a data.frame and getting rid of unnecessary data (first 4 rows and second and third columns)
 EGFP_neo_2n_T1 <- read.delim("T1-10G-4c-p41-T1_S8_counts.txt", skip = 1)[,c(1,7)]
 EGFP_neo_2n_T2 <- read.delim("T2_h_pES10_EGFP_neo_p41_4c_T2_1_counts.txt", skip = 1)[,c(1,7)]
@@ -24,12 +27,24 @@ clone_H_3n_T <- read.delim("T5_h_pES10_fusion_I_T1_3n_f_4_clone_H_counts.txt", s
 clone_K_3n_T <- read.delim("T4-pES10-3n-clone-K-T1_S11_counts.txt", skip = 1)[,c(1,7)]
 clone_L1_3n_T <- read.delim("T5-pES10-3n-clone-L-T1_S12_counts.txt", skip = 1)[,c(1,7)] 
 clone_L2_3n_T <- read.delim("T4_h_pES10_fusion_I_T1_3n_f_6_clone_L_counts.txt", skip = 1)[,c(1,7)] 
+CSES4_T1 <- read.delim("teratoma_emp1ReadsPerGene.out.tab", skip = 1)[,c(1,2)]    #male diploid ESCs
+CSES4_T2 <- read.delim("teratoma_emp2ReadsPerGene.out.tab", skip = 1)[,c(1,2)]    #male diploid ESCs
+colnames(CSES4_T1)[1] <- "Geneid"
+colnames(CSES4_T2)[1] <- "Geneid"
+
+dip_pES10_rep1 <- read.delim("C:/Users/owner/Desktop/RNA-seq counts guy/Ido's samples/SRR2131926_ReadsPerGene.out.tab", skip = 1)[-c(1:4),1:2] 
+dip_pES10_rep2 <- read.delim("C:/Users/owner/Desktop/RNA-seq counts guy/Ido's samples/SRR2131927_ReadsPerGene.out.tab", skip = 1)[-c(1:4),1:2] 
+colnames(dip_pES10_rep1)[1] <- "Geneid"
+colnames(dip_pES10_rep2)[1] <- "Geneid"
+
 
 ###merging all RNA-seq data into one data.frame and adding gene names according to annotation file:
 gene_exp_all <- Reduce(function(x, y) merge(x, y, all=T, by = "Geneid"), 
-                       list(dsRed_hygro_2n_T1,dsRed_hygro_2n_T2,EGFP_neo_2n_T1,EGFP_neo_2n_T2,clone_H_3n_T,clone_K_3n_T,clone_L1_3n_T,clone_L2_3n_T))
+                       list(dsRed_hygro_2n_T1,dsRed_hygro_2n_T2,EGFP_neo_2n_T1,EGFP_neo_2n_T2,clone_H_3n_T,clone_K_3n_T,clone_L1_3n_T,clone_L2_3n_T,
+                            CSES4_T1,CSES4_T2,dip_pES10_rep1,dip_pES10_rep2))
 colnames(gene_exp_all) <- c("ENSEMBL","dsRed-hygro 2n Ter1","dsRed-hygro 2n Ter2","EGFP-neo 2n Ter1","EGFP-neo 2n Ter2",
-                            "clone H 3n Ter","clone K 3n Ter","clone L1 3n Ter","clone L2 3n Ter")
+                            "clone H 3n Ter","clone K 3n Ter","clone L1 3n Ter","clone L2 3n Ter",
+                            "CSES4_T1","CSES4_T2","dip_pES10_rep1","dip_pES10_rep2")
 gene_lengths <- read.csv("gencode.v34.transcriptLengths.csv")[,-8]
 
 #removing the end of the ENSEMBL ID so that the same genes from different versions of the annotation file will be joined together  
@@ -41,20 +56,59 @@ colnames(gene_exp_all)[1] <- "ENSEMBL"
 
 #merging all data frame to one count table with all the data needed:
 gene_exp_all <- merge(gene_lengths, gene_exp_all, by = "ENSEMBL", all.y = T)
-gene_exp_all <- gene_exp_all[rowSums(is.na(gene_exp_all[ ,2:15])) == 0, ] #removing empty rows
-indRemoved <- which(apply(gene_exp_all[,8:15], 1, function(x) all(x == 0)) ) #saving all unexpressed genes in the data.frame
+gene_exp_all <- gene_exp_all[rowSums(is.na(gene_exp_all[ ,2:19])) == 0, ] #removing empty rows
+indRemoved <- which(apply(gene_exp_all[,8:19], 1, function(x) all(x == 0)) ) #saving all unexpressed genes in the data.frame
 gene_exp_all <- gene_exp_all[-indRemoved,]      #getting rid of rows (genes) that all of their columns are zeros
 .rowNamesDF(gene_exp_all, make.names=T) <- gene_exp_all$SYMBOL
 indRemoved_Y <- which(gene_exp_all$chr=="chrY") #saving all Y chr genes in the data.frame
 gene_exp_all <- gene_exp_all[-indRemoved_Y,]      #getting rid of rows (genes) that all of their columns are zeros
 write.csv(gene_exp_all,'teratomas_read_counts_table.csv')  # write read counts table
+X_genes <- gene_exp_all[gene_exp_all$chr=="chrX",7]
 
-cl=c("deepskyblue1","deepskyblue3","royalblue1","royalblue3","red1","red2","red3","red4")
-names(cl) <- str_replace_all(colnames(gene_exp_all[,8:15]),"_", " ")
+cl=c("deepskyblue1","deepskyblue3","royalblue1","royalblue3","red1","red2","red3","red4","lightgray","darkgray","darkblue","midnightblue")
+names(cl) <- str_replace_all(colnames(gene_exp_all[,8:19]),"_", " ")
 
 
+#### Differential expression (DE) analysis of Teratomas (with male teratomas):
 
-#### Differential expression (DE) analysis of Teratomas:
+ploidy <- factor(c(1,1,1,1,2,2,2,2,1,1), labels = c("2n","3n")) #4 teratomas samples of recently diploids ("normal") and 4 teratomas samples of triploid cells
+DE_object <- DGEList(gene_exp_all[,8:17], group = ploidy, genes = gene_exp_all$gene)
+keep <- rowSums(cpm(DE_object)>2) >= 3
+DE_object <- DE_object[keep, , keep.lib.sizes=FALSE]
+DE_TMM <- calcNormFactors(DE_object)
+
+###PCA analysis of log2(CPM) values of each sample
+cpm_normalized <- cpm(DE_TMM, log = T) #log2(cpm) after TMM normalization
+cpm_normalized_2 <- cpm(DE_TMM, log = F) #cpm after TMM normalization
+cpm_normalized <- data.frame("SYMBOL" = rownames(cpm_normalized), cpm_normalized)
+cpm_normalized_2 <- data.frame("SYMBOL" = rownames(cpm_normalized_2), cpm_normalized_2)
+cpm_normalized <- merge(gene_lengths, cpm_normalized, by = "SYMBOL",all.y = T)
+cpm_normalized_2 <- merge(gene_lengths, cpm_normalized_2, by = "SYMBOL",all.y = T)
+.rowNamesDF(cpm_normalized, make.names=T) <- cpm_normalized$SYMBOL
+.rowNamesDF(cpm_normalized_2, make.names=T) <- cpm_normalized_2$SYMBOL
+cpm_normalized_X <- cpm_normalized_2[cpm_normalized_2$SYMBOL %in% X_genes,]
+
+prin_comp <- prcomp(t(cpm_normalized[,8:17]), center = T, retx = T)
+gg <- cbind.data.frame(prin_comp$x, "Sample" =colnames(gene_exp_all)[8:17])
+gg <- data.frame(gg, "Ploidy"=ploidy)
+autoplot(prin_comp, data = gg, colour = "Sample",shape="Ploidy", label =F,size=3)+ scale_colour_manual(values=cl[1:10])+theme_bw()+
+  guides(shape = guide_legend(order = 1),colour = guide_legend(override.aes = list(shape=c(15))))
+
+summary(prin_comp)
+
+
+### X chr gene expression ###
+cpm_normalized_X <- cpm_normalized_X[order(cpm_normalized_X$start, decreasing = F),]
+pheatmap(data.matrix(cpm_normalized_X[,8:17]), scale = "row", cluster_rows=F, show_rownames =F,clustering_distance_cols = "maximum",color = colorRampPalette(c("darkblue", "white", "red3"))(100)) #TPM heatmap of X-linked expressed genes, without gene clustering
+
+avg_cpm_normalized_X <- data.frame(cpm_normalized_X[,1:7], "Diploid teratomas"=(cpm_normalized_X[,8]+cpm_normalized_X[,9]+cpm_normalized_X[,10]+cpm_normalized_X[,11])/4,
+                                   "Triploid teratomas"=(cpm_normalized_X[,12]+cpm_normalized_X[,13]+cpm_normalized_X[,14]+cpm_normalized_X[,15])/4,
+                                   "Diploid male teratomas"=(cpm_normalized_X[,16]+cpm_normalized_X[,17])/2)
+pheatmap(data.matrix(avg_cpm_normalized_X[,8:10]), scale = "row", cluster_rows=F, show_rownames =F,angle_col = 0,color = colorRampPalette(c("darkblue", "white", "red3"))(100)) #averaged TPM heatmap of X-linked expressed genes, without gene clustering
+pheatmap(data.matrix(avg_cpm_normalized_X[,8:10]), scale = "row", cluster_rows=F, show_rownames =F,angle_col = 0) #averaged TPM heatmap of X-linked expressed genes, without gene clustering
+
+
+#### Differential expression (DE) analysis of Teratomas (without male teratomas):
 
 ploidy <- factor(c(1,1,1,1,2,2,2,2), labels = c("2n","3n")) #4 teratomas samples of recently diploids ("normal") and 4 teratomas samples of triploid cells
 DE_object <- DGEList(gene_exp_all[,8:15], group = ploidy, genes = gene_exp_all$gene)
@@ -71,16 +125,16 @@ cpm_normalized <- merge(gene_lengths, cpm_normalized, by = "SYMBOL",all.y = T)
 cpm_normalized_2 <- merge(gene_lengths, cpm_normalized_2, by = "SYMBOL",all.y = T)
 .rowNamesDF(cpm_normalized, make.names=T) <- cpm_normalized$SYMBOL
 .rowNamesDF(cpm_normalized_2, make.names=T) <- cpm_normalized_2$SYMBOL
+cpm_normalized_X <- cpm_normalized_2[cpm_normalized_2$SYMBOL %in% X_genes,]
 
 prin_comp <- prcomp(t(cpm_normalized[,8:15]), center = T, retx = T)
 gg <- cbind.data.frame(prin_comp$x, "Sample" =colnames(gene_exp_all)[8:15])
 gg <- data.frame(gg, "Ploidy"=ploidy)
-autoplot(prin_comp, data = gg, colour = "Sample",shape="Ploidy", label =F,size=3)+ scale_colour_manual(values=cl)+theme_bw()+
+autoplot(prin_comp, data = gg, colour = "Sample",shape="Ploidy", label =F,size=3)+ scale_colour_manual(values=cl[1:8])+theme_bw()+
   guides(shape = guide_legend(order = 1),colour = guide_legend(override.aes = list(shape=c(15))))
 
-summary(prin_comp)
 
-#continue DE analysis
+### continue DE analysis ###
 batch <- factor(c(1,1,2,1,1,2,2,1), labels = c("batch1","batch2"))
 design <- model.matrix(~batch + ploidy)
 DE_TMM <- estimateDisp(DE_TMM, design, robust=TRUE)
@@ -102,9 +156,15 @@ sig_DE_3n<- data.frame(sig_DE_3n[,1:8],"Fold.Change"=2^sig_DE_3n$logFC_triploids
 library(fgsea)
 library(dplyr)
 
+# ranks <- TMM_3n[TMM_3n$FDR<=0.05 & abs(TMM_3n$logFC_triploids)>1,]
 ranks <- TMM_3n
 ranks[, 'score'] <-ranks$logFC_triploids* (-log(ranks$FDR))
+
+# ranks[ranks$logFC_triploids < 0, 'score'] <-
+#   ranks[ranks$logFC_triploids < 0,'logFC_triploids'] + log(ranks[ranks$logFC_triploids < 0,'FDR'])
+
 .rowNamesDF(ranks, make.names=T) <- ranks$SYMBOL
+
 ranks <- setNames(ranks$score,ranks$SYMBOL)
 cell_types <- gmtPathways("c8.all.v7.4.symbols.gmt") 
 fgseaRes <- fgseaMultilevel(cell_types, ranks, minSize=20, maxSize=500,eps = 0)
@@ -113,6 +173,8 @@ fgseaRes <- fgseaRes[fgseaRes$padj < 0.05,]
 
 collapsedPathways <- collapsePathways(fgseaRes[order(padj)][fgseaRes$padj < 0.05,], cell_types, ranks, nperm = 100000,pval.threshol = 0.01)
 mainPathways_fdr <- fgseaRes[pathway %in% collapsedPathways$mainPathways][order(padj), pathway]
+dev.new()
+plotGseaTable(cell_types[mainPathways_fdr], ranks, fgseaRes, gseaParam = 0.5)
 
 fgseaResTidy <- fgseaRes %>%
   as_tibble() %>%
@@ -226,18 +288,13 @@ cnetplot(ego3, foldChange=ranks, showCategory = 6,categorySize="qvalue", cex_lab
 #Layout of the map, e.g. 'star', 'circle', 'gem', 'dh', 'graphopt', 'grid', 'mds', 'randomly', 'fr', 'kk', 'drl' or 'lgl'
 
 
-
-################  calculate TPM and add gene names ####################
-
 # function to calculate TPM 
 tpm_calc <- function(counts, lengths) {
   rate <- counts / lengths
   rate/sum(rate)*1*10^6 
 }
 
-
-####### Differentiation analysis #######
-                          
+#######TeratoScore#######
 gct <- read.delim(file= "GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_median_tpm.gct", skip=2)
 #removing the end of the ENSEMBL ID so that the same genes from different versions of the annotation file will be joined together  
 
@@ -391,8 +448,8 @@ melted_gene_exp <- melted_gene_exp[order(melted_gene_exp$Order),]
 
 ggboxplot(melted_gene_exp, x= "Lineage", y= "gene_expression",fill="Ploidy",
           outlier.shape = NA, palette = c("royalblue","red3"),fun="mean_sd1")+
-  stat_compare_means(aes(group = Ploidy), label = "p.signif", method = "kruskal.test",label.y = 250, hide.ns = T,paired = F)+
-  coord_cartesian(ylim=c(0,250))
+  stat_compare_means(aes(group = Ploidy), label = "p.signif", method = "kruskal.test",label.y = 175, hide.ns = T,paired = F)+
+  coord_cartesian(ylim=c(0,175))
 
 stat=compare_means(gene_expression~Ploidy, data = melted_gene_exp, method="wilcox.test", p.adjust.method = "BH",group.by = "Lineage")
 ggbarplot(melted_gene_exp, x= "Lineage", y= "gene_expression",fill="Ploidy",palette = c("royalblue","red3"),width = 0.7, position = position_dodge(0.8), add="mean_se")+
@@ -400,3 +457,53 @@ ggbarplot(melted_gene_exp, x= "Lineage", y= "gene_expression",fill="Ploidy",pale
   theme_classic()+ylab("Relative Lineage-Specific Gene Expression (%)")+xlab(NULL)+
   theme(text = element_text(size = 13.5,face = "bold"), legend.position = "top")+
   scale_x_discrete(labels = c("Pluripotent","Nervous\nSystem","Kidney","Placenta","Lung","Gut","Skin","Blood","Pancreas","Liver","Heart","Skeletal\nMuscle"))
+
+
+################ calculate TPM and add gene names ####################
+
+# function to calculate TPM 
+tpm_calc <- function(counts, lengths) {
+  rate <- counts / lengths
+  rate/sum(rate)*1*10^6 
+}
+
+
+# calculate TPM
+tpm <- gene_exp_all
+for(i in names(gene_exp_all[,8:19])) {
+  tpm[i] <- tpm_calc(gene_exp_all[i],gene_exp_all$length_total_exons) 
+}
+
+#plot XIST expression levels in the teratomas
+xist_exp <- data.frame("XIST"=t(tpm[tpm$SYMBOL=="XIST",8:19]),"Ploidy"=c("2n", "2n", "2n", "2n", "3n", "3n", "3n", "3n", "2n male", "2n male", "2n Xi ESCs", "2n Xi ESCs"))
+stat=compare_means(XIST~Ploidy, data = xist_exp, method="wilcox.test", p.adjust.method = "BH")
+ggbarplot(xist_exp, x= "Ploidy", y= "XIST",fill="Ploidy",palette = c("royalblue","red3","grey","darkblue"), position = position_dodge(0.8), add="mean_se")+
+  ylab("XIST expressiom levels (TPM)")+geom_hline(yintercept = 1,linetype=2)
+
+#plot XIST expression levels in the teratomas
+xist_exp <- data.frame("XIST"=t(tpm[tpm$SYMBOL=="XIST",8:19]),"Ploidy"=c("2n", "2n", "2n", "2n", "3n", "3n", "3n", "3n", "2n male", "2n male", "2n Xi ESCs", "2n Xi ESCs"))
+xist_exp$XIST[xist_exp$XIST==0] <- 0.01
+xist_exp$XIST <- log2(xist_exp$XIST)
+stat=compare_means(XIST~Ploidy, data = xist_exp, method="wilcox.test", p.adjust.method = "BH")
+ggbarplot(xist_exp, x= "Ploidy", y= "XIST",fill="Ploidy",palette = c("royalblue","red3","grey","darkblue"), position = position_dodge(0.8), add="mean_se")+
+  ylab(expression(Log[2](TPM)))+geom_hline(yintercept = 0,linetype=2)
+
+
+
+################ nuclear area analysis 2n vs 3n teratomas ####################
+setwd("C:/Users/owner/Desktop/nuclear size teratomas/area measurments")
+pacinian_curpsule <- read.csv("pacinian_curpsule_nuclear_measurements.csv")
+colnames(pacinian_curpsule)[1] <- "Nuclear_area"
+#general nuclear volume in teratomas:
+Nuclear_volume <- pacinian_curpsule$Nuclear_area/pi
+Nuclear_volume <- Nuclear_volume^0.5
+Nuclear_volume <- Nuclear_volume^3*pi*4/3          #in µm^3
+nuclear_measurments <- data.frame("Measurments"=c(pacinian_curpsule$Nuclear_area,Nuclear_volume),"type"=c(rep("Nuclear_area",100),rep("Nuclear_volume",100)), "Ploidy"=rep(pacinian_curpsule$ploidy,2))
+
+relative_nuclear_measurments <- nuclear_measurments
+relative_nuclear_measurments$Measurments[relative_nuclear_measurments$type=="Nuclear_area"] <- relative_nuclear_measurments$Measurments[relative_nuclear_measurments$type=="Nuclear_area"]/mean(relative_nuclear_measurments$Measurments[relative_nuclear_measurments$type=="Nuclear_area" & relative_nuclear_measurments$Ploidy=="2n"])
+relative_nuclear_measurments$Measurments[relative_nuclear_measurments$type=="Nuclear_volume"] <- relative_nuclear_measurments$Measurments[relative_nuclear_measurments$type=="Nuclear_volume"]/mean(relative_nuclear_measurments$Measurments[relative_nuclear_measurments$type=="Nuclear_volume" & relative_nuclear_measurments$Ploidy=="2n"])
+
+stat=compare_means(Measurments~Ploidy, data = relative_nuclear_measurments, method="t.test", p.adjust.method = "BH",group.by = "type")
+ggbarplot(relative_nuclear_measurments, x= "type", y= "Measurments",fill="Ploidy",palette = c("royalblue","red3"), position = position_dodge(0.8),lab.vjust = c(-1.6,-1.5,-2.5,-1.6),label = T,lab.nb.digits = 2, add="mean_se")+
+  stat_pvalue_manual(data = stat, label = "p.format",x= "type", y.position = 1.7,tip.length = 0.01,hide.ns = F)+ylab("Relative size")
